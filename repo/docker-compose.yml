@@ -1,0 +1,39 @@
+services:
+
+  # ── Production app (Nginx static serve) ──────────────────────────────────────
+  chargebay:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: server
+    ports:
+      - "5199:80"
+    restart: unless-stopped
+
+  # ── Unit tests + TypeScript check (Docker) ───────────────────────────────────
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: test-runner
+    profiles:
+      - test
+
+  # ── Playwright E2E (runs against the chargebay service) ─────────────────────
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.59.0-noble
+    working_dir: /app
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - npm_cache:/root/.npm
+    environment:
+      PLAYWRIGHT_BASE_URL: "http://chargebay:80"
+    command: sh -c "npm ci --prefer-offline --no-audit --no-fund && npx playwright test --project=chromium"
+    depends_on:
+      - chargebay
+    profiles:
+      - test
+
+volumes:
+  npm_cache:

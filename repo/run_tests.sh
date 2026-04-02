@@ -3,17 +3,32 @@ set -e
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
-echo "=== Installing dependencies ==="
-npm ci
+echo "========================================"
+echo " ChargeBay — Docker test suite"
+echo "========================================"
 
-echo "=== TypeScript check ==="
-npx tsc --noEmit
+# Keep the workspace clean even on failures.
+cleanup() {
+  docker compose --profile test down --remove-orphans >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
 
-echo "=== Unit & component tests (Vitest) ==="
-npm run test -- --reporter=verbose
+echo ""
+echo "=== [1/2] Unit tests · TypeScript check (Docker) ==="
+docker compose --profile test run --rm --build test
 
-echo "=== E2E tests (Playwright with managed web server) ==="
-npx playwright install --with-deps chromium
-npx playwright test --project=chromium
+echo ""
+echo "=== [2/2] Playwright E2E (Docker) ==="
+docker compose --profile test up -d --build chargebay
+docker run --rm \
+  --network=host \
+  -v "$ROOT:/app" \
+  -w /app \
+  -e PLAYWRIGHT_BASE_URL=http://localhost:5199 \
+  mcr.microsoft.com/playwright:v1.59.0-noble \
+  sh -c "npm ci --prefer-offline --no-audit --no-fund && npx playwright test --project=chromium"
 
-echo "=== All tests passed ==="
+echo ""
+echo "========================================"
+echo " All tests passed"
+echo "========================================"

@@ -1,13 +1,24 @@
 #!/usr/bin/env bash
 set -e
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
-cd "$ROOT"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [ ! -d node_modules ]; then
-  echo "Installing dependencies..."
-  npm ci
-fi
+echo "Starting ChargeBay..."
+docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d --build
 
-echo "Starting ChargeBay console on http://localhost:5173"
-npm run dev -- --host 0.0.0.0 --port 5173
+echo ""
+echo "Waiting for service to be ready..."
+
+for i in {1..30}; do
+  if curl -fsS "http://localhost:5199" >/dev/null 2>&1; then
+    echo ""
+    echo "Service URL : http://localhost:5199"
+    exit 0
+  fi
+  sleep 2
+done
+
+echo ""
+echo "Service did not become ready in time."
+docker compose -f "$SCRIPT_DIR/docker-compose.yml" ps
+exit 1
