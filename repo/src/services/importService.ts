@@ -136,17 +136,28 @@ function parseCsv(csv: string): { headers: string[]; rows: Record<string, string
   return { headers, rows };
 }
 
-function parseDate(value: string): number | null {
-  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})\s(\d{2}):(\d{2})$/);
-  if (!match) {
-    return null;
+export function parseDate(value: string): number | null {
+  // Full datetime format: MM/DD/YYYY HH:mm
+  const fullMatch = value.match(/^(\d{2})\/(\d{2})\/(\d{4})\s(\d{2}):(\d{2})$/);
+  if (fullMatch) {
+    const [, mm, dd, yyyy, hh, min] = fullMatch;
+    const month = Number(mm);
+    const day = Number(dd);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    const date = new Date(Number(yyyy), month - 1, day, Number(hh), Number(min));
+    return Number.isNaN(date.getTime()) ? null : date.getTime();
   }
-  const [, mm, dd, yyyy, hh, min] = match;
-  const date = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(min));
-  if (Number.isNaN(date.getTime())) {
-    return null;
+  // Date-only format: MM/DD/YYYY — defaults to 00:00 local time
+  const dateMatch = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (dateMatch) {
+    const [, mm, dd, yyyy] = dateMatch;
+    const month = Number(mm);
+    const day = Number(dd);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    const date = new Date(Number(yyyy), month - 1, day, 0, 0);
+    return Number.isNaN(date.getTime()) ? null : date.getTime();
   }
-  return date.getTime();
+  return null;
 }
 
 async function sha256(text: string): Promise<string> {
@@ -252,10 +263,13 @@ async function validateRows(
       const duration = Number(row.durationMinutes);
       const rate = Number(row.ratePerMinute);
       const adjustment = Number(row.adjustmentAmount);
+      // Pricing bounds per prompt spec: price must be $0.01–$9,999.99
+      const RATE_MIN = 0.01;
+      const RATE_MAX = 9999.99;
       if (!(duration > 0)) {
         errorCode = 'IMPORT_DURATION_INVALID';
-      } else if (!(rate > 0) || Number(rate.toFixed(2)) !== rate) {
-        errorCode = 'IMPORT_RATE_INVALID';
+      } else if (!(rate >= RATE_MIN) || !(rate <= RATE_MAX) || Number(rate.toFixed(2)) !== rate) {
+        errorCode = 'IMPORT_RATE_OUT_OF_BOUNDS';
       } else if (Number.isNaN(adjustment)) {
         errorCode = 'IMPORT_ADJUSTMENT_INVALID';
       }

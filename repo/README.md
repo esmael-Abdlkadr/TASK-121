@@ -58,13 +58,16 @@ You can also choose to **Logout** from the re-unlock modal.
 
 A light/dark theme toggle is available in the shell header. Your preference is persisted in LocalStorage.
 
-## LocalStorage Settings
+## Storage Layout
 
-The following settings are stored in LocalStorage (not IndexedDB):
+### IndexedDB (primary persistence)
+All business data, audit logs, site configuration (`siteConfigs` table), and rate-limit state (`rateLimits` table) are persisted in IndexedDB via Dexie.js.
+
+### LocalStorage (lightweight UI/session pointers only)
 - **Theme** (`cb_theme`): light or dark
 - **Last selected site** (`cb_last_site`): used by SystemAdministrator for site-scoped operations
 - **Notification preferences** (`cb_notif_prefs_{userId}`): per-user notification template toggles and desktop banner setting
-- **Site configuration** (`cb_site_config_{siteId}`): operational parameters like rate, temp leave, no-show grace period
+- **Site config cache** (`cb_site_config_{siteId}`): synced mirror of IndexedDB site config for synchronous reads
 
 ## Build
 
@@ -84,14 +87,21 @@ Serves the production build locally.
 
 ## Run All Tests
 
+### Local (no Docker required)
+
 ```bash
 # Unit + Component tests (Vitest)
 npm run test
 
 # E2E tests (Playwright, uses managed dev server)
+npx playwright install --with-deps
 npx playwright test
+```
 
-# Full suite
+### Docker full-suite (optional)
+
+```bash
+# Runs both Vitest and Playwright inside a container
 bash run_tests.sh
 ```
 
@@ -120,7 +130,7 @@ Imported sensitive fields (customer name, plate, invoice notes) are encrypted at
 ## Architecture Notes
 
 - **Service layer**: all mutation/query business logic in `src/services/*`
-- **RBAC enforcement**: `assertCanMutate()` blocks Auditor from all data mutations at the service layer; `assertSiteScope()` enforces site-based row filtering
+- **RBAC enforcement**: `assertCanMutate()` blocks Auditor from all data mutations; `assertManagerOrAdmin()` restricts sensitive operations (site config, export/import, tiering) to SystemAdministrator and SiteManager; `assertSiteScope()` enforces site-based row filtering
 - **Hot/Cold tiering**: active tables + archived `_cold` tables; 90-day archival policy
 - **Auth and key lifecycle**: PBKDF2 password verification, lockout handling, in-memory encryption key, key cleared on logout, re-unlock required after session restore
 - **Audit chain**: append-only logs with chain hash verification

@@ -263,6 +263,58 @@ describe('Iteration 6 acceptance checks', () => {
     expect(batch.totalRows).toBe(1);
   });
 
+  it('rejects order row with ratePerMinute below minimum bound (< 0.01)', async () => {
+    const { actor, encryptionKey } = await setup();
+    const csv = [
+      'orderNumber,sessionId,durationMinutes,ratePerMinute,adjustmentAmount,adjustmentReason,invoiceNotes',
+      'CB-SITE-001-20260401-0001,1,60,0.001,0,test,note'
+    ].join('\n');
+    const file = new File([csv], 'orders-low-rate.csv', { type: 'text/csv' });
+    const map = importService.autoMapFields(
+      ['orderNumber', 'sessionId', 'durationMinutes', 'ratePerMinute', 'adjustmentAmount', 'adjustmentReason', 'invoiceNotes'],
+      'orders'
+    );
+
+    const batch = await importService.startImport(file, 'orders', map, actor, encryptionKey);
+    expect(batch.status).toBe('Failed');
+    const records = await db.importRows.where('batchId').equals(batch.id as number).toArray();
+    expect(records.some((r) => r.errorCode === 'IMPORT_RATE_OUT_OF_BOUNDS')).toBe(true);
+  });
+
+  it('rejects order row with ratePerMinute above maximum bound (> 9999.99)', async () => {
+    const { actor, encryptionKey } = await setup();
+    const csv = [
+      'orderNumber,sessionId,durationMinutes,ratePerMinute,adjustmentAmount,adjustmentReason,invoiceNotes',
+      'CB-SITE-001-20260401-0002,2,60,10000,0,test,note'
+    ].join('\n');
+    const file = new File([csv], 'orders-high-rate.csv', { type: 'text/csv' });
+    const map = importService.autoMapFields(
+      ['orderNumber', 'sessionId', 'durationMinutes', 'ratePerMinute', 'adjustmentAmount', 'adjustmentReason', 'invoiceNotes'],
+      'orders'
+    );
+
+    const batch = await importService.startImport(file, 'orders', map, actor, encryptionKey);
+    expect(batch.status).toBe('Failed');
+    const records = await db.importRows.where('batchId').equals(batch.id as number).toArray();
+    expect(records.some((r) => r.errorCode === 'IMPORT_RATE_OUT_OF_BOUNDS')).toBe(true);
+  });
+
+  it('accepts order row with ratePerMinute within valid bounds', async () => {
+    const { actor, encryptionKey } = await setup();
+    const csv = [
+      'orderNumber,sessionId,durationMinutes,ratePerMinute,adjustmentAmount,adjustmentReason,invoiceNotes',
+      'CB-SITE-001-20260401-0003,3,60,1.50,0,test,note'
+    ].join('\n');
+    const file = new File([csv], 'orders-valid-rate.csv', { type: 'text/csv' });
+    const map = importService.autoMapFields(
+      ['orderNumber', 'sessionId', 'durationMinutes', 'ratePerMinute', 'adjustmentAmount', 'adjustmentReason', 'invoiceNotes'],
+      'orders'
+    );
+
+    const batch = await importService.startImport(file, 'orders', map, actor, encryptionKey);
+    expect(batch.status).toBe('Complete');
+  });
+
   it('CSV import handles multiline quoted cells without splitting the row', async () => {
     const { actor, encryptionKey } = await setup();
     const csv = [

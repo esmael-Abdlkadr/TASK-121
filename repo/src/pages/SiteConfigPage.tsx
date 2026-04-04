@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { useAuth } from '../hooks/useAuth';
@@ -15,12 +15,11 @@ export default function SiteConfigPage() {
   });
   const siteId = isGlobal ? selectedSite : (currentUser?.siteId ?? 1);
 
-  const initial = useMemo(() => siteConfigService.getSiteConfig(siteId), [siteId]);
-  const [config, setConfig] = useState(initial);
+  const [config, setConfig] = useState(() => siteConfigService.getSiteConfig(siteId));
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    setConfig(siteConfigService.getSiteConfig(siteId));
+    void siteConfigService.loadSiteConfig(siteId).then(setConfig);
   }, [siteId]);
 
   const onSave = (event: FormEvent) => {

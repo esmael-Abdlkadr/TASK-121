@@ -2,7 +2,7 @@ import { db } from '../db/db';
 import type { User } from '../types';
 import { auditService } from './auditService';
 import { cryptoService } from './cryptoService';
-import { assertCanMutate, assertSiteScope } from './rbacService';
+import { assertManagerOrAdmin, assertSiteScope } from './rbacService';
 
 interface DateRange {
   from: number;
@@ -65,7 +65,7 @@ async function exportPackage(
   password: string,
   actor: User
 ): Promise<Blob> {
-  assertCanMutate(actor);
+  assertManagerOrAdmin(actor);
   assertSiteScope(actor, siteId);
   const [reservations, sessions, orders, reservationsCold, sessionsCold, ordersCold] = await Promise.all([
     db.reservations
@@ -133,7 +133,7 @@ async function exportPackage(
 }
 
 async function importPackage(file: File, password: string, actor: User): Promise<{ inserted: number; skipped: number }> {
-  assertCanMutate(actor);
+  assertManagerOrAdmin(actor);
   // (package already carries siteId - no scope assertion on import)
   const text =
     'text' in file

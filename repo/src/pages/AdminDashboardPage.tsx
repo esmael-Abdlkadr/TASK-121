@@ -113,6 +113,8 @@ export default function AdminDashboardPage() {
                     currentUser
                   );
                   setMessage('Export package created.');
+                } catch (err) {
+                  setMessage(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
                 } finally {
                   setBusy(false);
                 }

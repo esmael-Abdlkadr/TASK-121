@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../db/db';
 import { cryptoService } from './cryptoService';
 import { heartbeatService } from './heartbeatService';
+import { parseDate } from './importService';
 import { reservationService, BayConflictError, TempLeaveLimitError } from './reservationService';
 import { siteConfigService } from './siteConfigService';
 
@@ -199,6 +200,47 @@ describe('Iteration 3 acceptance checks', () => {
     );
   });
 
+  it('flags session as Anomaly when temp-leave count limit is exceeded', async () => {
+    const { actor, bayId, siteId, key } = await setupBase();
+    await siteConfigService.saveSiteConfig({
+      siteId,
+      tempLeaveMaxCount: 1,
+      tempLeaveMaxMinutes: 15,
+      anomalyHeartbeatTimeoutMin: 30,
+      noShowGraceMinutes: 10,
+      ratePerMinute: 0.5
+    });
+
+    const reservation = await reservationService.createReservation(
+      {
+        operationId: 'op-templeave-anomaly',
+        bayId,
+        siteId,
+        userId: actor.id as number,
+        customerName: 'Anomaly User',
+        customerPlate: 'ANOM01',
+        scheduledStart: Date.now() + 60_000,
+        scheduledEnd: Date.now() + 3_600_000
+      },
+      actor,
+      key
+    );
+
+    const session = await reservationService.confirmArrival(reservation.id as number, 'manual', actor);
+    // Use the one allowed temp leave
+    await reservationService.startTempLeave(session.id as number, actor);
+    await reservationService.endTempLeave(session.id as number, actor);
+
+    // Second startTempLeave exceeds the count limit — must flag anomaly before throwing
+    await expect(reservationService.startTempLeave(session.id as number, actor)).rejects.toBeInstanceOf(
+      TempLeaveLimitError
+    );
+
+    // Session must now be in Anomaly state
+    const updated = await db.sessions_charging.get(session.id as number);
+    expect(updated?.status).toBe('Anomaly');
+  });
+
   it('flags anomaly after heartbeat timeout', async () => {
     const { actor, bayId, siteId, key } = await setupBase();
     await siteConfigService.saveSiteConfig({
@@ -287,5 +329,115 @@ describe('Iteration 3 acceptance checks', () => {
     expect(actions).toContain('ARRIVAL_CONFIRMED');
     expect(actions).toContain('TEMP_LEAVE_STARTED');
     expect(actions).toContain('TEMP_LEAVE_ENDED');
+  });
+
+  // CHB-H-001 regression: active sessions must NOT be escalated when heartbeat is being maintained.
+  it('active session stays non-anomalous when heartbeat tick keeps it fresh', async () => {
+    const { actor, bayId, siteId, key } = await setupBase();
+    await siteConfigService.saveSiteConfig({
+      siteId,
+      tempLeaveMaxCount: 1,
+      tempLeaveMaxMinutes: 15,
+      anomalyHeartbeatTimeoutMin: 30,
+      noShowGraceMinutes: 10,
+      ratePerMinute: 0.5
+    });
+
+    const reservation = await reservationService.createReservation(
+      {
+        operationId: 'op-hb-fresh',
+        bayId,
+        siteId,
+        userId: actor.id as number,
+        customerName: 'Fresh Heartbeat',
+        customerPlate: 'FH0001',
+        scheduledStart: Date.now() + 60_000,
+        scheduledEnd: Date.now() + 3_600_000
+      },
+      actor,
+      key
+    );
+
+    const session = await reservationService.confirmArrival(reservation.id as number, 'manual', actor);
+
+    // Simulate the periodic tick keeping heartbeatAt current (heartbeat is fresh).
+    await heartbeatService.tick(actor);
+
+    // Running anomaly check should NOT escalate a freshly-ticked session.
+    await heartbeatService.checkAnomalies(actor);
+
+    const updated = await db.sessions_charging.get(session.id as number);
+    expect(updated?.status).toBe('Active');
+  });
+
+  // Verify existing stale-heartbeat test still passes (regression guard).
+  it('active session is escalated when heartbeat is genuinely stale', async () => {
+    const { actor, bayId, siteId, key } = await setupBase();
+    await siteConfigService.saveSiteConfig({
+      siteId,
+      tempLeaveMaxCount: 1,
+      tempLeaveMaxMinutes: 15,
+      anomalyHeartbeatTimeoutMin: 30,
+      noShowGraceMinutes: 10,
+      ratePerMinute: 0.5
+    });
+
+    const reservation = await reservationService.createReservation(
+      {
+        operationId: 'op-hb-stale',
+        bayId,
+        siteId,
+        userId: actor.id as number,
+        customerName: 'Stale Heartbeat',
+        customerPlate: 'SH0001',
+        scheduledStart: Date.now() + 60_000,
+        scheduledEnd: Date.now() + 3_600_000
+      },
+      actor,
+      key
+    );
+
+    const session = await reservationService.confirmArrival(reservation.id as number, 'manual', actor);
+
+    // Backdate heartbeatAt to simulate a genuinely stale heartbeat (app was closed).
+    await db.sessions_charging.update(session.id as number, {
+      heartbeatAt: Date.now() - 31 * 60_000
+    });
+
+    await heartbeatService.checkAnomalies(actor);
+
+    const updated = await db.sessions_charging.get(session.id as number);
+    expect(updated?.status).toBe('Anomaly');
+  });
+});
+
+describe('Import date parser', () => {
+  it('accepts MM/DD/YYYY HH:mm format (backward-compatible)', () => {
+    const ts = parseDate('04/15/2025 09:30');
+    expect(ts).not.toBeNull();
+    const d = new Date(ts!);
+    expect(d.getFullYear()).toBe(2025);
+    expect(d.getMonth()).toBe(3); // April = 3
+    expect(d.getDate()).toBe(15);
+    expect(d.getHours()).toBe(9);
+    expect(d.getMinutes()).toBe(30);
+  });
+
+  it('accepts MM/DD/YYYY date-only format with 00:00 default time', () => {
+    const ts = parseDate('04/15/2025');
+    expect(ts).not.toBeNull();
+    const d = new Date(ts!);
+    expect(d.getFullYear()).toBe(2025);
+    expect(d.getMonth()).toBe(3);
+    expect(d.getDate()).toBe(15);
+    expect(d.getHours()).toBe(0);
+    expect(d.getMinutes()).toBe(0);
+  });
+
+  it('rejects invalid date string', () => {
+    expect(parseDate('not-a-date')).toBeNull();
+    expect(parseDate('2025-04-15')).toBeNull();
+    expect(parseDate('15/04/2025')).toBeNull();
+    expect(parseDate('')).toBeNull();
   });
 });

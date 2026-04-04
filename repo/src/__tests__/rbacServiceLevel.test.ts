@@ -119,6 +119,13 @@ describe('Service-level RBAC — quality, tiering, export, siteConfig', () => {
     ).rejects.toThrow('RBAC_SCOPE_VIOLATION');
   });
 
+  it('siteConfigService: Attendant cannot save config (service-level block)', async () => {
+    const { siteId, attendant } = await setupUsers();
+    await expect(
+      siteConfigService.saveSiteConfig({ siteId, tempLeaveMaxCount: 2, tempLeaveMaxMinutes: 10, anomalyHeartbeatTimeoutMin: 30, noShowGraceMinutes: 5, ratePerMinute: 0.5 }, attendant)
+    ).rejects.toThrow('RBAC_SCOPE_VIOLATION');
+  });
+
   it('siteConfigService: SiteManager of different site cannot save config for another site', async () => {
     const { siteId, manager2 } = await setupUsers();
     await expect(
@@ -133,11 +140,25 @@ describe('Service-level RBAC — quality, tiering, export, siteConfig', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('siteConfigService: SystemAdministrator can save config for any site', async () => {
+    const { siteId, admin } = await setupUsers();
+    await expect(
+      siteConfigService.saveSiteConfig({ siteId, tempLeaveMaxCount: 3, tempLeaveMaxMinutes: 20, anomalyHeartbeatTimeoutMin: 45, noShowGraceMinutes: 15, ratePerMinute: 0.75 }, admin)
+    ).resolves.toBeUndefined();
+  });
+
   // ─── exportService.exportPackage ───────────────────────────────────────────
   it('exportService: Auditor cannot create export package', async () => {
     const { siteId, auditor } = await setupUsers();
     await expect(
       exportService.exportPackage(siteId, { from: 0, to: Date.now() }, 'pass', auditor)
+    ).rejects.toThrow('RBAC_SCOPE_VIOLATION');
+  });
+
+  it('exportService: Attendant cannot create export package (service-level block)', async () => {
+    const { siteId, attendant } = await setupUsers();
+    await expect(
+      exportService.exportPackage(siteId, { from: 0, to: Date.now() }, 'pass', attendant)
     ).rejects.toThrow('RBAC_SCOPE_VIOLATION');
   });
 
@@ -162,6 +183,13 @@ describe('Service-level RBAC — quality, tiering, export, siteConfig', () => {
     const pkg = { version: 1, siteId, salt: 'aa', iv: 'bb', ciphertext: '' };
     const file = new File([JSON.stringify(pkg)], 'pkg.json');
     await expect(exportService.importPackage(file, 'TestPass#Import1', auditor)).rejects.toThrow('RBAC_SCOPE_VIOLATION');
+  });
+
+  it('exportService.importPackage: Attendant cannot import package (service-level block)', async () => {
+    const { siteId, attendant } = await setupUsers();
+    const pkg = { version: 1, siteId, salt: 'aa', iv: 'bb', ciphertext: '' };
+    const file = new File([JSON.stringify(pkg)], 'pkg.json');
+    await expect(exportService.importPackage(file, 'TestPass#Import1', attendant)).rejects.toThrow('RBAC_SCOPE_VIOLATION');
   });
 
   it('exportService.importPackage: SiteManager of different site cannot import package for another site', async () => {
@@ -214,5 +242,33 @@ describe('Service-level RBAC — quality, tiering, export, siteConfig', () => {
     const { attendant } = await setupUsers();
     const file = new File(['header\nval'], 'test.csv', { type: 'text/csv' });
     await expect(importService.startImport(file, 'sessions', { header: '' }, attendant)).rejects.toThrow('RBAC_SCOPE_VIOLATION');
+  });
+
+  // ─── tieringService.runTiering ────────────────────────────────────────────
+  it('tieringService: Auditor cannot run tiering', async () => {
+    const { siteId, auditor } = await setupUsers();
+    await expect(tieringService.runTiering(siteId, auditor)).rejects.toThrow('RBAC_SCOPE_VIOLATION');
+  });
+
+  it('tieringService: Attendant cannot run tiering (service-level block)', async () => {
+    const { siteId, attendant } = await setupUsers();
+    await expect(tieringService.runTiering(siteId, attendant)).rejects.toThrow('RBAC_SCOPE_VIOLATION');
+  });
+
+  it('tieringService: SiteManager of different site cannot run tiering for another site', async () => {
+    const { siteId, manager2 } = await setupUsers();
+    await expect(tieringService.runTiering(siteId, manager2)).rejects.toThrow('RBAC_SCOPE_VIOLATION');
+  });
+
+  it('tieringService: SiteManager can run tiering for own site', async () => {
+    const { siteId, manager } = await setupUsers();
+    const result = await tieringService.runTiering(siteId, manager);
+    expect(result).toEqual({ reservationsArchived: 0, sessionsArchived: 0, ordersArchived: 0 });
+  });
+
+  it('tieringService: SystemAdministrator can run tiering for any site', async () => {
+    const { siteId, admin } = await setupUsers();
+    const result = await tieringService.runTiering(siteId, admin);
+    expect(result).toEqual({ reservationsArchived: 0, sessionsArchived: 0, ordersArchived: 0 });
   });
 });

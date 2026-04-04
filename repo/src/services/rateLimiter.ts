@@ -1,3 +1,5 @@
+import { db } from '../db/db';
+
 interface WindowState {
   count: number;
   windowStart: number;
@@ -19,24 +21,25 @@ export class RateLimitError extends Error {
   }
 }
 
-function key(userId: number, action: string) {
+function compositeKey(userId: number, action: string) {
   return `cb_ratelimit_${userId}_${action}`;
 }
 
+/**
+ * In-memory cache of rate-limit windows. Populated from IndexedDB via
+ * `syncFromIdb()` at boot. Authoritative writes go to IndexedDB first,
+ * then update this cache. Sync callers read from the cache.
+ */
+const stateCache = new Map<string, WindowState>();
+
 function readState(userId: number, action: string): WindowState {
-  const raw = localStorage.getItem(key(userId, action));
-  if (!raw) {
-    return { count: 0, windowStart: Date.now() };
-  }
-  try {
-    return JSON.parse(raw) as WindowState;
-  } catch {
-    return { count: 0, windowStart: Date.now() };
-  }
+  return stateCache.get(compositeKey(userId, action)) ?? { count: 0, windowStart: Date.now() };
 }
 
 function writeState(userId: number, action: string, state: WindowState): void {
-  localStorage.setItem(key(userId, action), JSON.stringify(state));
+  const key = compositeKey(userId, action);
+  stateCache.set(key, state);
+  void db.rateLimits.put({ key, ...state }).catch(() => {});
 }
 
 class RateLimiter {
@@ -57,12 +60,21 @@ class RateLimiter {
     const current = readState(userId, action);
     if (now - current.windowStart > 60_000) {
       writeState(userId, action, { count, windowStart: now });
-      return;
+    } else {
+      writeState(userId, action, {
+        count: current.count + count,
+        windowStart: current.windowStart
+      });
     }
-    writeState(userId, action, {
-      count: current.count + count,
-      windowStart: current.windowStart
-    });
+  }
+
+  async syncFromIdb(userId: number, action: string): Promise<void> {
+    try {
+      const record = await db.rateLimits.get(compositeKey(userId, action));
+      if (record) {
+        stateCache.set(record.key, { count: record.count, windowStart: record.windowStart });
+      }
+    } catch { /* non-fatal */ }
   }
 }
 

@@ -15,8 +15,15 @@ import type {
   Reservation,
   SessionAuth,
   Site,
+  SiteConfig,
   User
 } from '../types';
+
+export interface RateLimitRecord {
+  key: string;
+  count: number;
+  windowStart: number;
+}
 
 class ChargeBayDb extends Dexie {
   users!: Table<User, number>;
@@ -34,10 +41,32 @@ class ChargeBayDb extends Dexie {
   reservations_cold!: Table<ArchivedReservation, number>;
   sessions_cold!: Table<ArchivedSession, number>;
   orders_cold!: Table<ArchivedOrder, number>;
+  siteConfigs!: Table<SiteConfig & { id: number }, number>;
+  rateLimits!: Table<RateLimitRecord, string>;
 
   constructor() {
     super(DB_NAME);
-    this.version(1).stores(HOT_AND_COLD_SCHEMA);
+
+    const V1_SCHEMA = { ...HOT_AND_COLD_SCHEMA };
+    delete (V1_SCHEMA as Record<string, string>).siteConfigs;
+    delete (V1_SCHEMA as Record<string, string>).rateLimits;
+    this.version(1).stores(V1_SCHEMA);
+
+    this.version(2).stores(HOT_AND_COLD_SCHEMA).upgrade(async (tx) => {
+      const siteConfigs = tx.table('siteConfigs');
+      const sites = tx.table('sites');
+      const allSites = await sites.toArray();
+      for (const site of allSites) {
+        const key = `cb_site_config_${site.id}`;
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            await siteConfigs.put({ ...parsed, id: site.id, siteId: site.id });
+          } catch { /* skip unparsable */ }
+        }
+      }
+    });
   }
 }
 

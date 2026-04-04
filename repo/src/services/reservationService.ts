@@ -238,6 +238,8 @@ async function startTempLeave(sessionId: number, actor: User): Promise<void> {
 
   const config = siteConfigService.getSiteConfig(session.siteId);
   if (session.tempLeaveCount >= config.tempLeaveMaxCount) {
+    // Prompt requires: exceeding temp-leave count limit triggers Unverified Occupancy anomaly.
+    await flagAnomaly(sessionId, 'Unverified Occupancy: temp leave count limit exceeded', actor);
     throw new TempLeaveLimitError();
   }
 

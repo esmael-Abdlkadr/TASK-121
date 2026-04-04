@@ -1,7 +1,7 @@
 import { db } from '../db/db';
 import type { User } from '../types';
 import { auditService } from './auditService';
-import { assertCanMutate, assertSiteScope } from './rbacService';
+import { assertManagerOrAdmin, assertSiteScope } from './rbacService';
 
 export interface TieringResult {
   reservationsArchived: number;
@@ -10,7 +10,7 @@ export interface TieringResult {
 }
 
 async function runTiering(siteId: number, actor: User): Promise<TieringResult> {
-  assertCanMutate(actor);
+  assertManagerOrAdmin(actor);
   assertSiteScope(actor, siteId);
   const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
   let reservationsArchived = 0;

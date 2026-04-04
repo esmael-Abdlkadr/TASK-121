@@ -1,8 +1,9 @@
+import { db } from '../db/db';
 import type { SiteConfig, User } from '../types';
 import { auditService } from './auditService';
-import { assertCanMutate, assertSiteScope } from './rbacService';
+import { assertManagerOrAdmin, assertSiteScope } from './rbacService';
 
-const DEFAULT_CONFIG = {
+const DEFAULT_CONFIG: Omit<SiteConfig, 'siteId'> = {
   tempLeaveMaxCount: 1,
   tempLeaveMaxMinutes: 15,
   anomalyHeartbeatTimeoutMin: 30,
@@ -10,38 +11,64 @@ const DEFAULT_CONFIG = {
   ratePerMinute: 0.5
 };
 
-function storageKey(siteId: number) {
-  return `cb_site_config_${siteId}`;
+const configCache = new Map<number, SiteConfig>();
+
+function buildConfig(siteId: number, partial: Partial<SiteConfig>): SiteConfig {
+  return {
+    siteId,
+    tempLeaveMaxCount: partial.tempLeaveMaxCount ?? DEFAULT_CONFIG.tempLeaveMaxCount,
+    tempLeaveMaxMinutes: partial.tempLeaveMaxMinutes ?? DEFAULT_CONFIG.tempLeaveMaxMinutes,
+    anomalyHeartbeatTimeoutMin:
+      partial.anomalyHeartbeatTimeoutMin ?? DEFAULT_CONFIG.anomalyHeartbeatTimeoutMin,
+    noShowGraceMinutes: partial.noShowGraceMinutes ?? DEFAULT_CONFIG.noShowGraceMinutes,
+    ratePerMinute: partial.ratePerMinute ?? DEFAULT_CONFIG.ratePerMinute
+  };
 }
 
+/**
+ * Synchronous read from in-memory cache. The cache is populated by:
+ *  - `loadSiteConfig()` at app boot (reads from IndexedDB)
+ *  - `saveSiteConfig()` on every write (writes IndexedDB first, then updates cache)
+ *
+ * If the cache is cold (before boot hydration), falls back to defaults.
+ * This is intentional: callers that need guaranteed fresh data should
+ * await `loadSiteConfig()` first.
+ */
 function getSiteConfig(siteId: number): SiteConfig {
-  const raw = localStorage.getItem(storageKey(siteId));
-  if (!raw) {
-    return { siteId, ...DEFAULT_CONFIG };
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<SiteConfig>;
-    return {
-      siteId,
-      tempLeaveMaxCount: parsed.tempLeaveMaxCount ?? DEFAULT_CONFIG.tempLeaveMaxCount,
-      tempLeaveMaxMinutes: parsed.tempLeaveMaxMinutes ?? DEFAULT_CONFIG.tempLeaveMaxMinutes,
-      anomalyHeartbeatTimeoutMin:
-        parsed.anomalyHeartbeatTimeoutMin ?? DEFAULT_CONFIG.anomalyHeartbeatTimeoutMin,
-      noShowGraceMinutes: parsed.noShowGraceMinutes ?? DEFAULT_CONFIG.noShowGraceMinutes,
-      ratePerMinute: parsed.ratePerMinute ?? DEFAULT_CONFIG.ratePerMinute
-    };
-  } catch {
-    return { siteId, ...DEFAULT_CONFIG };
-  }
+  const cached = configCache.get(siteId);
+  if (cached) return cached;
+  return { siteId, ...DEFAULT_CONFIG };
 }
 
+/**
+ * Async IndexedDB-first load. Called at app boot and whenever the
+ * authoritative value is needed after a potential external change.
+ * Populates the in-memory cache so subsequent sync reads are fast.
+ */
+async function loadSiteConfig(siteId: number): Promise<SiteConfig> {
+  const stored = await db.siteConfigs.get(siteId).catch(() => undefined);
+  if (stored) {
+    const config = buildConfig(siteId, stored);
+    configCache.set(siteId, config);
+    return config;
+  }
+  const fallback = { siteId, ...DEFAULT_CONFIG };
+  configCache.set(siteId, fallback);
+  return fallback;
+}
+
+/**
+ * Write to IndexedDB (authoritative), then update the in-memory cache.
+ * Also mirrors to localStorage for backward compat with any stale readers.
+ */
 async function saveSiteConfig(config: SiteConfig, actor?: User): Promise<void> {
   if (actor) {
-    assertCanMutate(actor);
+    assertManagerOrAdmin(actor);
     assertSiteScope(actor, config.siteId);
   }
-  localStorage.setItem(storageKey(config.siteId), JSON.stringify(config));
+  await db.siteConfigs.put({ ...config, id: config.siteId });
+  configCache.set(config.siteId, config);
+  localStorage.setItem(`cb_site_config_${config.siteId}`, JSON.stringify(config));
   if (actor) {
     await auditService.log(actor, 'PRICING_UPDATED', 'SiteConfig', config.siteId, {
       ratePerMinute: config.ratePerMinute
@@ -51,5 +78,6 @@ async function saveSiteConfig(config: SiteConfig, actor?: User): Promise<void> {
 
 export const siteConfigService = {
   getSiteConfig,
+  loadSiteConfig,
   saveSiteConfig
 };

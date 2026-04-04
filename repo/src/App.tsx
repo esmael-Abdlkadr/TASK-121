@@ -5,6 +5,7 @@ import { heartbeatService } from './services/heartbeatService';
 import { notificationService } from './services/notificationService';
 import { qualityService } from './services/qualityService';
 import { reservationService } from './services/reservationService';
+import { siteConfigService } from './services/siteConfigService';
 import { tieringService } from './services/tieringService';
 import { AppRouter } from './router';
 
@@ -73,14 +74,26 @@ function Runtime() {
 
     const siteId = currentUser.siteId;
     const canMutate = currentUser.role !== 'Auditor';
+
+    // Hydrate site config cache from IndexedDB before any timer reads it.
+    if (siteId) {
+      void siteConfigService.loadSiteConfig(siteId);
+    }
+
     if (siteId && canMutate) {
       void qualityService.runWeeklyIfDue(siteId, currentUser);
       void tieringService.runTiering(siteId, currentUser);
     }
 
-    // heartbeatAt is updated only by real user actions (confirmArrival, endTempLeave).
-    // Auto-ticking every session would prevent the 30-min stale-heartbeat anomaly rule
-    // from ever firing while the app is open, so no periodic tick is scheduled here.
+    // Tick heartbeat for all Active sessions every 5 minutes so normal long-running
+    // sessions are not incorrectly escalated to Anomaly while the operator is present.
+    // The anomaly check (every 1 min) only fires when the last tick is genuinely stale
+    // – i.e. when the app has been closed/backgrounded beyond the configured timeout.
+    if (canMutate) void heartbeatService.tick(currentUser);
+    const heartbeatTickTimer = window.setInterval(() => {
+      if (canMutate) void heartbeatService.tick(currentUser);
+    }, 5 * 60_000);
+
     const anomalyTimer = window.setInterval(() => {
       if (canMutate) void heartbeatService.checkAnomalies(currentUser);
     }, 60_000);
@@ -110,6 +123,7 @@ function Runtime() {
     });
 
     return () => {
+      window.clearInterval(heartbeatTickTimer);
       window.clearInterval(anomalyTimer);
       window.clearInterval(noShowTimer);
       window.clearInterval(notifRetryTimer);

@@ -28,6 +28,8 @@ export default function SessionsOrdersPage() {
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
   const isReadOnly = currentUser?.role === 'Auditor';
+  const isManagerOrAdmin =
+    currentUser?.role === 'SystemAdministrator' || currentUser?.role === 'SiteManager';
 
   const sessions = useLiveQuery(
     async () => {
@@ -161,7 +163,7 @@ export default function SessionsOrdersPage() {
                             End Temp Leave
                           </button>
                         ) : null}
-                        {session.status === 'Anomaly' ? (
+                        {session.status === 'Anomaly' && isManagerOrAdmin ? (
                           <button
                             className="button ghost"
                             type="button"
@@ -217,9 +219,7 @@ export default function SessionsOrdersPage() {
                   <td>${order.totalAmount.toFixed(2)}</td>
                   <td>{order.status}</td>
                   <td>
-                    {isReadOnly ? (
-                      order.reconciliationStatus
-                    ) : (
+                    {isManagerOrAdmin ? (
                       <select
                         value={order.reconciliationStatus}
                         onChange={async (event) => {
@@ -238,6 +238,8 @@ export default function SessionsOrdersPage() {
                         <option value="Matched">Matched</option>
                         <option value="Discrepancy">Discrepancy</option>
                       </select>
+                    ) : (
+                      order.reconciliationStatus
                     )}
                   </td>
                   <td>{order.billingType}</td>
@@ -257,7 +259,7 @@ export default function SessionsOrdersPage() {
                             {busyAction === `submit-${order.id}` ? 'Submitting...' : 'Submit'}
                           </button>
                         ) : null}
-                        {order.status === 'Pending' && order.billingType === 'Compensation' ? (
+                        {order.status === 'Pending' && order.billingType === 'Compensation' && isManagerOrAdmin ? (
                           <button className="button ghost" type="button" disabled={busyAction !== null} onClick={() => setCompOrder(order)}>
                             Approve
                           </button>
@@ -275,7 +277,7 @@ export default function SessionsOrdersPage() {
                             {busyAction === `pay-${order.id}` ? 'Processing...' : 'Mark Paid'}
                           </button>
                         ) : null}
-                        {order.status === 'Paid' ? (
+                        {order.status === 'Paid' && isManagerOrAdmin ? (
                           <button
                             className="button ghost"
                             type="button"

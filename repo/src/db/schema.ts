@@ -15,5 +15,7 @@ export const HOT_AND_COLD_SCHEMA = {
   qualityReports: '++id, siteId, generatedAt, type',
   reservations_cold: '++id, bayId, siteId, originalId, archivedAt',
   sessions_cold: '++id, bayId, siteId, originalId, archivedAt',
-  orders_cold: '++id, siteId, originalId, archivedAt'
+  orders_cold: '++id, siteId, originalId, archivedAt',
+  siteConfigs: 'id',
+  rateLimits: '&key'
 };

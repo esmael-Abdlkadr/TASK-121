@@ -217,7 +217,7 @@ export default function ReservationDrawer({ reservationId, onClose }: Props) {
                         setMessage('Temporary leave started.');
                       } catch (error) {
                         if (error instanceof TempLeaveLimitError) {
-                          setMessage('Temp leave limit reached.');
+                          setMessage('Temp leave limit reached — session flagged as Unverified Occupancy anomaly.');
                         }
                       } finally {
                         setBusy(false);
