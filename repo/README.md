@@ -130,7 +130,7 @@ Imported sensitive fields (customer name, plate, invoice notes) are encrypted at
 ## Architecture Notes
 
 - **Service layer**: all mutation/query business logic in `src/services/*`
-- **RBAC enforcement**: `assertCanMutate()` blocks Auditor from all data mutations; `assertManagerOrAdmin()` restricts sensitive operations (site config, export/import, tiering) to SystemAdministrator and SiteManager; `assertSiteScope()` enforces site-based row filtering
+- **RBAC enforcement**: `assertCanMutate()` blocks Auditor from all data mutations; `assertManagerOrAdmin()` restricts sensitive operations (site config, export/import, tiering) to SystemAdministrator and SiteManager; `assertSiteScope()` enforces site-based row filtering on all service entry points including import validate/write paths, preventing cross-site operations by non-global roles
 - **Hot/Cold tiering**: active tables + archived `_cold` tables; 90-day archival policy
 - **Auth and key lifecycle**: PBKDF2 password verification, lockout handling, in-memory encryption key, key cleared on logout, re-unlock required after session restore
 - **Audit chain**: append-only logs with chain hash verification

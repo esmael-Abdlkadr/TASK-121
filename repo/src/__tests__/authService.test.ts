@@ -44,4 +44,37 @@ describe('authService', () => {
     expect(await authService.restoreSession()).toBeNull();
     expect(login.user.username).toBe('attendant');
   });
+
+  it('restoreSession rejects tampered userId in localStorage', async () => {
+    await authService.login('attendant', 'ChargeBay#Att01');
+
+    // Create a second user to impersonate
+    const { hash: h2, salt: s2 } = await cryptoService.hashPassword('ChargeBay#Admin1');
+    const victimId = await db.users.add({
+      username: 'sysadmin',
+      passwordHash: h2,
+      salt: s2,
+      role: 'SystemAdministrator',
+      failedAttempts: 0
+    });
+
+    // Tamper the stored session to point to a different userId
+    const stored = JSON.parse(localStorage.getItem('cb_session') as string);
+    stored.userId = victimId;
+    stored.role = 'SystemAdministrator';
+    localStorage.setItem('cb_session', JSON.stringify(stored));
+
+    // restoreSession must reject — session.userId does not match stored.userId
+    const result = await authService.restoreSession();
+    expect(result).toBeNull();
+    expect(localStorage.getItem('cb_session')).toBeNull();
+  });
+
+  it('restoreSession succeeds with valid matching session', async () => {
+    await authService.login('attendant', 'ChargeBay#Att01');
+    const user = await authService.restoreSession();
+    expect(user).not.toBeNull();
+    expect(user!.username).toBe('attendant');
+    expect(user!.role).toBe('Attendant');
+  });
 });

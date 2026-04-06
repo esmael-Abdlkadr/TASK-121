@@ -132,7 +132,7 @@ describe('Iteration 3 acceptance checks', () => {
 
   it('auto no-show marks no-show and frees bay', async () => {
     const { actor, bayId, siteId, key } = await setupBase();
-    await siteConfigService.saveSiteConfig({
+    await siteConfigService.bootstrapSiteConfig({
       siteId,
       tempLeaveMaxCount: 1,
       tempLeaveMaxMinutes: 15,
@@ -167,7 +167,7 @@ describe('Iteration 3 acceptance checks', () => {
 
   it('rejects second temp leave when max count is one', async () => {
     const { actor, bayId, siteId, key } = await setupBase();
-    await siteConfigService.saveSiteConfig({
+    await siteConfigService.bootstrapSiteConfig({
       siteId,
       tempLeaveMaxCount: 1,
       tempLeaveMaxMinutes: 15,
@@ -202,7 +202,7 @@ describe('Iteration 3 acceptance checks', () => {
 
   it('flags session as Anomaly when temp-leave count limit is exceeded', async () => {
     const { actor, bayId, siteId, key } = await setupBase();
-    await siteConfigService.saveSiteConfig({
+    await siteConfigService.bootstrapSiteConfig({
       siteId,
       tempLeaveMaxCount: 1,
       tempLeaveMaxMinutes: 15,
@@ -243,7 +243,7 @@ describe('Iteration 3 acceptance checks', () => {
 
   it('flags anomaly after heartbeat timeout', async () => {
     const { actor, bayId, siteId, key } = await setupBase();
-    await siteConfigService.saveSiteConfig({
+    await siteConfigService.bootstrapSiteConfig({
       siteId,
       tempLeaveMaxCount: 1,
       tempLeaveMaxMinutes: 15,
@@ -334,7 +334,7 @@ describe('Iteration 3 acceptance checks', () => {
   // CHB-H-001 regression: active sessions must NOT be escalated when heartbeat is being maintained.
   it('active session stays non-anomalous when heartbeat tick keeps it fresh', async () => {
     const { actor, bayId, siteId, key } = await setupBase();
-    await siteConfigService.saveSiteConfig({
+    await siteConfigService.bootstrapSiteConfig({
       siteId,
       tempLeaveMaxCount: 1,
       tempLeaveMaxMinutes: 15,
@@ -373,7 +373,7 @@ describe('Iteration 3 acceptance checks', () => {
   // Verify existing stale-heartbeat test still passes (regression guard).
   it('active session is escalated when heartbeat is genuinely stale', async () => {
     const { actor, bayId, siteId, key } = await setupBase();
-    await siteConfigService.saveSiteConfig({
+    await siteConfigService.bootstrapSiteConfig({
       siteId,
       tempLeaveMaxCount: 1,
       tempLeaveMaxMinutes: 15,

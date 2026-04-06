@@ -1,0 +1,2 @@
+stationId,connectorId,customerName,customerPlate,scheduledStart,scheduledEnd
+ST-01,C1,Invalid Date User,ABC123,NOT_A_DATE,04/01/2026 11:00

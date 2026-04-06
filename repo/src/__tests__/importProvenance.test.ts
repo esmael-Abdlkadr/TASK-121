@@ -35,7 +35,7 @@ async function setupForImport() {
     siteId,
     failedAttempts: 0
   });
-  await siteConfigService.saveSiteConfig({
+  await siteConfigService.bootstrapSiteConfig({
     siteId,
     tempLeaveMaxCount: 1,
     tempLeaveMaxMinutes: 15,
@@ -65,7 +65,7 @@ describe('Import provenance (raw → cleaned → billing lineage)', () => {
       'reservations'
     );
 
-    const batch = await importService.startImport(file, 'reservations', fieldMap, user, key);
+    const batch = await importService.startImport(file, 'reservations', fieldMap, user, user.siteId as number, key);
     expect(batch.status).toBe('Complete');
 
     const reservations = await db.reservations.toArray();
@@ -88,7 +88,7 @@ describe('Import provenance (raw → cleaned → billing lineage)', () => {
       'orders'
     );
 
-    const batch = await importService.startImport(file, 'orders', fieldMap, user, key);
+    const batch = await importService.startImport(file, 'orders', fieldMap, user, user.siteId as number, key);
     expect(batch.status).toBe('Complete');
 
     const orders = await db.orders.toArray();
@@ -111,7 +111,7 @@ describe('Import provenance (raw → cleaned → billing lineage)', () => {
       'reservations'
     );
 
-    const batch = await importService.startImport(file, 'reservations', fieldMap, user, key);
+    const batch = await importService.startImport(file, 'reservations', fieldMap, user, user.siteId as number, key);
     const batchId = batch.id as number;
 
     const importRow = (await db.importRows.where('batchId').equals(batchId).first())!;
@@ -136,7 +136,7 @@ describe('Import provenance (raw → cleaned → billing lineage)', () => {
       ['stationId', 'connectorId', 'customerName', 'customerPlate', 'scheduledStart', 'scheduledEnd'],
       'reservations'
     );
-    const batch = await importService.startImport(file, 'reservations', fieldMap, user, key);
+    const batch = await importService.startImport(file, 'reservations', fieldMap, user, user.siteId as number, key);
     const batchId = batch.id as number;
 
     // Reservation has both batch and row provenance from the import.
@@ -205,7 +205,7 @@ describe('Import provenance (raw → cleaned → billing lineage)', () => {
     ].join('\n');
     const sessionFile = new File([sessionCsv], 'sessions.csv', { type: 'text/csv' });
     const sessionFieldMap = importService.autoMapFields(['reservationId', 'startedAt'], 'sessions');
-    const sessionBatch = await importService.startImport(sessionFile, 'sessions', sessionFieldMap, user);
+    const sessionBatch = await importService.startImport(sessionFile, 'sessions', sessionFieldMap, user, user.siteId as number);
     const sessionBatchId = sessionBatch.id as number;
 
     // The imported session carries both importBatchId and importRowId.
@@ -256,7 +256,7 @@ describe('Import provenance (raw → cleaned → billing lineage)', () => {
       ['stationId', 'connectorId', 'customerName', 'customerPlate', 'scheduledStart', 'scheduledEnd'],
       'reservations'
     );
-    const batch = await importService.startImport(file, 'reservations', fieldMap, user, key);
+    const batch = await importService.startImport(file, 'reservations', fieldMap, user, user.siteId as number, key);
     const batchId = batch.id as number;
     expect(batch.status).toBe('Complete');
 

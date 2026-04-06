@@ -167,68 +167,92 @@ async function importPackage(file: File, password: string, actor: User): Promise
     }
 
     const payload = JSON.parse(payloadText) as {
-      reservations: Array<{ id?: number }>;
-      sessions: Array<{ id?: number }>;
-      orders: Array<{ id?: number }>;
-      reservationsCold: Array<{ id?: number }>;
-      sessionsCold: Array<{ id?: number }>;
-      ordersCold: Array<{ id?: number }>;
+      reservations: Array<{ id?: number; siteId?: number }>;
+      sessions: Array<{ id?: number; siteId?: number }>;
+      orders: Array<{ id?: number; siteId?: number }>;
+      reservationsCold: Array<{ id?: number; siteId?: number }>;
+      sessionsCold: Array<{ id?: number; siteId?: number }>;
+      ordersCold: Array<{ id?: number; siteId?: number }>;
     };
+
+    // Row-level site-scope enforcement: every row must belong to pkg.siteId
+    const allRows = [
+      ...payload.reservations,
+      ...payload.sessions,
+      ...payload.orders,
+      ...payload.reservationsCold,
+      ...payload.sessionsCold,
+      ...payload.ordersCold
+    ];
+    for (const row of allRows) {
+      if (row.siteId !== undefined && row.siteId !== pkg.siteId) {
+        throw new Error('IMPORT_SITE_SCOPE_VIOLATION');
+      }
+    }
 
     let inserted = 0;
     let skipped = 0;
-    for (const row of payload.reservations) {
-      if (row.id && (await db.reservations.get(row.id))) {
-        skipped += 1;
-      } else {
-        await db.reservations.add(row as never);
-        inserted += 1;
+    await db.transaction(
+      'rw',
+      [db.reservations, db.sessions_charging, db.orders, db.reservations_cold, db.sessions_cold, db.orders_cold],
+      async () => {
+        for (const row of payload.reservations) {
+          if (row.id && (await db.reservations.get(row.id))) {
+            skipped += 1;
+          } else {
+            await db.reservations.add(row as never);
+            inserted += 1;
+          }
+        }
+        for (const row of payload.sessions) {
+          if (row.id && (await db.sessions_charging.get(row.id))) {
+            skipped += 1;
+          } else {
+            await db.sessions_charging.add(row as never);
+            inserted += 1;
+          }
+        }
+        for (const row of payload.orders) {
+          if (row.id && (await db.orders.get(row.id))) {
+            skipped += 1;
+          } else {
+            await db.orders.add(row as never);
+            inserted += 1;
+          }
+        }
+        for (const row of payload.reservationsCold) {
+          if (row.id && (await db.reservations_cold.get(row.id))) {
+            skipped += 1;
+          } else {
+            await db.reservations_cold.add(row as never);
+            inserted += 1;
+          }
+        }
+        for (const row of payload.sessionsCold) {
+          if (row.id && (await db.sessions_cold.get(row.id))) {
+            skipped += 1;
+          } else {
+            await db.sessions_cold.add(row as never);
+            inserted += 1;
+          }
+        }
+        for (const row of payload.ordersCold) {
+          if (row.id && (await db.orders_cold.get(row.id))) {
+            skipped += 1;
+          } else {
+            await db.orders_cold.add(row as never);
+            inserted += 1;
+          }
+        }
       }
-    }
-    for (const row of payload.sessions) {
-      if (row.id && (await db.sessions_charging.get(row.id))) {
-        skipped += 1;
-      } else {
-        await db.sessions_charging.add(row as never);
-        inserted += 1;
-      }
-    }
-    for (const row of payload.orders) {
-      if (row.id && (await db.orders.get(row.id))) {
-        skipped += 1;
-      } else {
-        await db.orders.add(row as never);
-        inserted += 1;
-      }
-    }
-    for (const row of payload.reservationsCold) {
-      if (row.id && (await db.reservations_cold.get(row.id))) {
-        skipped += 1;
-      } else {
-        await db.reservations_cold.add(row as never);
-        inserted += 1;
-      }
-    }
-    for (const row of payload.sessionsCold) {
-      if (row.id && (await db.sessions_cold.get(row.id))) {
-        skipped += 1;
-      } else {
-        await db.sessions_cold.add(row as never);
-        inserted += 1;
-      }
-    }
-    for (const row of payload.ordersCold) {
-      if (row.id && (await db.orders_cold.get(row.id))) {
-        skipped += 1;
-      } else {
-        await db.orders_cold.add(row as never);
-        inserted += 1;
-      }
-    }
+    );
 
     await auditService.log(actor, 'IMPORT_PACKAGE_APPLIED', 'Site', pkg.siteId, { inserted, skipped });
     return { inserted, skipped };
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && (err.message === 'IMPORT_SITE_SCOPE_VIOLATION' || err.message === 'RBAC_SCOPE_VIOLATION')) {
+      throw err;
+    }
     throw new Error('EXPORT_SIGNATURE_MISMATCH');
   }
 }

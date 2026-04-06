@@ -5,6 +5,7 @@ import { db } from '../db/db';
 import { useAuth } from '../hooks/useAuth';
 import { BayConflictError, reservationService } from '../services/reservationService';
 import { cryptoService } from '../services/cryptoService';
+import { storageService } from '../services/storageService';
 import type { Reservation } from '../types';
 
 function maskPlate(plate: string): string {
@@ -17,22 +18,30 @@ function maskPlate(plate: string): string {
 
 export default function ReservationsPage() {
   const { currentUser, encryptionKey, hasRole } = useAuth();
+  const isGlobal = currentUser?.role === 'SystemAdministrator';
+  const sites = useLiveQuery(() => db.sites.toArray(), []);
+  const [selectedSite, setSelectedSite] = useState<number>(() => {
+    if (!isGlobal) return currentUser?.siteId ?? 1;
+    return storageService.getLastSite() ?? 1;
+  });
+  const siteId = isGlobal ? selectedSite : (currentUser?.siteId ?? -1);
+
   const bays = useLiveQuery(
     () =>
       db.bays
         .where('siteId')
-        .equals(currentUser?.siteId ?? -1)
+        .equals(siteId)
         .toArray(),
-    [currentUser?.siteId]
+    [siteId]
   );
 
   const reservations = useLiveQuery(
     () =>
       db.reservations
         .where('siteId')
-        .equals(currentUser?.siteId ?? -1)
+        .equals(siteId)
         .toArray(),
-    [currentUser?.siteId]
+    [siteId]
   );
 
   const reservationPlateById = useLiveQuery(async () => {
@@ -99,7 +108,7 @@ export default function ReservationsPage() {
         {
           operationId: crypto.randomUUID(),
           bayId: Number(form.bayId),
-          siteId: currentUser.siteId as number,
+          siteId: siteId as number,
           userId: currentUser.id as number,
           customerName: form.customerName,
           customerPlate: form.customerPlate,
@@ -135,6 +144,26 @@ export default function ReservationsPage() {
           </button>
         ) : null}
       </div>
+
+      {isGlobal && (
+        <div className="filters-row">
+          <label>
+            Site:{' '}
+            <select
+              value={selectedSite}
+              onChange={(e) => {
+                const id = Number(e.target.value);
+                setSelectedSite(id);
+                storageService.setLastSite(id);
+              }}
+            >
+              {(sites ?? []).map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
 
       {isLoading ? (
         <p className="muted">Loading bays...</p>

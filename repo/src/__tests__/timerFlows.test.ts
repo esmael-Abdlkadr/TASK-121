@@ -44,14 +44,14 @@ async function setup() {
   const attendant = (await db.users.get(attId))!;
   const key = await cryptoService.deriveEncryptionKey('ChargeBay#Att01', hashAtt.salt);
 
-  await siteConfigService.saveSiteConfig({
+  await siteConfigService.bootstrapSiteConfig({
     siteId,
     tempLeaveMaxCount: 1,
     tempLeaveMaxMinutes: 15,
     anomalyHeartbeatTimeoutMin: 30,
     noShowGraceMinutes: 10,
     ratePerMinute: 0.5
-  }, manager);
+  });
 
   return { siteId, bayId, manager, attendant, key };
 }

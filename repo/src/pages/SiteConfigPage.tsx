@@ -24,7 +24,8 @@ export default function SiteConfigPage() {
 
   const onSave = (event: FormEvent) => {
     event.preventDefault();
-    void siteConfigService.saveSiteConfig(config, currentUser ?? undefined).then(() => {
+    if (!currentUser) return;
+    void siteConfigService.saveSiteConfig(config, currentUser).then(() => {
       setSaved(true);
       window.setTimeout(() => setSaved(false), 1500);
     });

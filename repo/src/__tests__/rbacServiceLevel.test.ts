@@ -233,15 +233,15 @@ describe('Service-level RBAC — quality, tiering, export, siteConfig', () => {
 
   // ─── importService.startImport ─────────────────────────────────────────────
   it('importService.startImport: Auditor cannot import', async () => {
-    const { auditor } = await setupUsers();
+    const { siteId, auditor } = await setupUsers();
     const file = new File(['header\nval'], 'test.csv', { type: 'text/csv' });
-    await expect(importService.startImport(file, 'sessions', { header: '' }, auditor)).rejects.toThrow('RBAC_SCOPE_VIOLATION');
+    await expect(importService.startImport(file, 'sessions', { header: '' }, auditor, siteId)).rejects.toThrow('RBAC_SCOPE_VIOLATION');
   });
 
   it('importService.startImport: Attendant cannot import', async () => {
-    const { attendant } = await setupUsers();
+    const { siteId, attendant } = await setupUsers();
     const file = new File(['header\nval'], 'test.csv', { type: 'text/csv' });
-    await expect(importService.startImport(file, 'sessions', { header: '' }, attendant)).rejects.toThrow('RBAC_SCOPE_VIOLATION');
+    await expect(importService.startImport(file, 'sessions', { header: '' }, attendant, siteId)).rejects.toThrow('RBAC_SCOPE_VIOLATION');
   });
 
   // ─── tieringService.runTiering ────────────────────────────────────────────

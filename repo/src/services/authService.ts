@@ -131,8 +131,14 @@ async function restoreSession(): Promise<User | null> {
     return null;
   }
 
+  if (session.userId !== stored.userId) {
+    localStorage.removeItem(AUTH_SESSION_KEY);
+    await db.sessions_auth.delete(session.id as number);
+    return null;
+  }
+
   await db.sessions_auth.update(session.id as number, { lastActiveAt: now });
-  const user = await db.users.get(stored.userId);
+  const user = await db.users.get(session.userId);
   if (!user) {
     localStorage.removeItem(AUTH_SESSION_KEY);
     return null;

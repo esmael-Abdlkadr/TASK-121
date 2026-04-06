@@ -4,7 +4,7 @@ import type { ImportBatch, ImportRow, User } from '../types';
 import { auditService } from './auditService';
 import { cryptoService } from './cryptoService';
 import { notificationService } from './notificationService';
-import { assertManagerOrAdmin } from './rbacService';
+import { assertManagerOrAdmin, assertSiteScope } from './rbacService';
 import { siteConfigService } from './siteConfigService';
 
 export type ImportType = 'reservations' | 'orders' | 'sessions';
@@ -224,7 +224,7 @@ function applyFieldMap(row: Record<string, string>, fieldMap: FieldMap): Record<
 async function validateRows(
   rows: Record<string, string>[],
   type: ImportType,
-  actor: User
+  targetSiteId: number
 ): Promise<{ importRows: ImportRow[]; invalidCount: number; validCount: number }> {
   const output: ImportRow[] = [];
   let invalidCount = 0;
@@ -250,7 +250,7 @@ async function validateRows(
       } else {
         const bay = await db.bays
           .where('siteId')
-          .equals(actor.siteId as number)
+          .equals(targetSiteId)
           .filter((b) => b.stationId === row.stationId && b.connectorId === row.connectorId)
           .first();
         if (!bay) {
@@ -325,11 +325,14 @@ async function validateFile(
   file: File,
   type: ImportType,
   fieldMap: FieldMap,
-  actor: User
+  actor: User,
+  targetSiteId: number
 ): Promise<{ totalRows: number; validRows: number; invalidRows: number; rows: ImportRow[]; headers: string[] }> {
+  assertManagerOrAdmin(actor);
+  assertSiteScope(actor, targetSiteId);
   const parsed = await parseFile(file);
   const mappedRows = parsed.rows.map((row) => applyFieldMap(row, fieldMap));
-  const validated = await validateRows(mappedRows, type, actor);
+  const validated = await validateRows(mappedRows, type, targetSiteId);
   return {
     totalRows: mappedRows.length,
     validRows: validated.validCount,
@@ -344,9 +347,11 @@ async function startImport(
   type: ImportType,
   fieldMap: FieldMap,
   actor: User,
+  targetSiteId: number,
   encryptionKey?: CryptoKey
 ): Promise<ImportBatch> {
   assertManagerOrAdmin(actor);
+  assertSiteScope(actor, targetSiteId);
 
   if (type !== 'sessions' && !encryptionKey) {
     throw new Error('IMPORT_ENCRYPTION_KEY_REQUIRED');
@@ -357,7 +362,7 @@ async function startImport(
 
   const existingBatch = await db.importBatches
     .where('siteId')
-    .equals(actor.siteId as number)
+    .equals(targetSiteId)
     .filter((b) => b.dedupeHash === dedupeHash)
     .first();
   if (existingBatch) {
@@ -365,7 +370,7 @@ async function startImport(
   }
 
   const batchId = await db.importBatches.add({
-    siteId: actor.siteId as number,
+    siteId: targetSiteId,
     type,
     status: 'Validating',
     createdAt: Date.now(),
@@ -373,7 +378,7 @@ async function startImport(
   });
 
   const mappedRows = parsed.rows.map((row) => applyFieldMap(row, fieldMap));
-  const validation = await validateRows(mappedRows, type, actor);
+  const validation = await validateRows(mappedRows, type, targetSiteId);
   const validationRows = validation.importRows.map((row) => ({ ...row, batchId }));
   await db.importRows.bulkAdd(validationRows);
 
@@ -428,13 +433,13 @@ async function startImport(
           const start = parseDate(row.scheduledStart) as number;
           const bay = await db.bays
             .where('siteId')
-            .equals(actor.siteId as number)
+            .equals(targetSiteId)
             .filter((b) => b.stationId === row.stationId && b.connectorId === row.connectorId)
             .first();
 
           const dup = await db.reservations
             .where('siteId')
-            .equals(actor.siteId as number)
+            .equals(targetSiteId)
             .filter((r) => r.bayId === bay?.id && r.scheduledStart === start)
             .first();
           if (dup) {
@@ -445,14 +450,14 @@ async function startImport(
             await db.reservations.add({
               operationId: crypto.randomUUID(),
               bayId: bay?.id as number,
-              siteId: actor.siteId as number,
+              siteId: targetSiteId,
               userId: actor.id as number,
               customerName: encName,
               customerPlate: encPlate,
               scheduledStart: start,
               scheduledEnd: parseDate(row.scheduledEnd) as number,
               status: 'Scheduled',
-              noShowDeadline: start + siteConfigService.getSiteConfig(actor.siteId as number).noShowGraceMinutes * 60_000,
+              noShowDeadline: start + siteConfigService.getSiteConfig(targetSiteId).noShowGraceMinutes * 60_000,
               version: 1,
               importBatchId: batchId,
               importRowId: index + 1
@@ -463,7 +468,7 @@ async function startImport(
         if (type === 'orders') {
           const dup = await db.orders
             .where('siteId')
-            .equals(actor.siteId as number)
+            .equals(targetSiteId)
             .filter((o) => o.orderNumber === row.orderNumber)
             .first();
           if (dup) {
@@ -477,7 +482,7 @@ async function startImport(
             await db.orders.add({
               operationId: crypto.randomUUID(),
               sessionId: Number(row.sessionId),
-              siteId: actor.siteId as number,
+              siteId: targetSiteId,
               orderNumber: row.orderNumber,
               status: 'Draft',
               billingType: 'Standard',

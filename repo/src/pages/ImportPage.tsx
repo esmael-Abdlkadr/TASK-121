@@ -4,9 +4,18 @@ import FieldMapper from '../components/import/FieldMapper';
 import { db } from '../db/db';
 import { useAuth } from '../hooks/useAuth';
 import { importService, type ImportType } from '../services/importService';
+import { storageService } from '../services/storageService';
 
 export default function ImportPage() {
   const { currentUser, encryptionKey } = useAuth();
+  const isGlobal = currentUser?.role === 'SystemAdministrator';
+  const sites = useLiveQuery(() => db.sites.toArray(), []);
+  const [selectedSite, setSelectedSite] = useState<number>(() => {
+    if (!isGlobal) return currentUser?.siteId ?? 1;
+    return storageService.getLastSite() ?? 1;
+  });
+  const siteId = isGlobal ? selectedSite : (currentUser?.siteId as number);
+
   const [type, setType] = useState<ImportType>('reservations');
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -24,15 +33,19 @@ export default function ImportPage() {
     if (!currentUser) {
       return [];
     }
-    if (currentUser.role === 'SystemAdministrator') {
-      return db.importBatches.orderBy('createdAt').reverse().toArray();
+    if (isGlobal) {
+      return db.importBatches
+        .where('siteId')
+        .equals(siteId)
+        .reverse()
+        .sortBy('createdAt');
     }
     return db.importBatches
       .where('siteId')
-      .equals(currentUser.siteId as number)
+      .equals(siteId)
       .reverse()
       .sortBy('createdAt');
-  }, [currentUser]);
+  }, [currentUser, siteId]);
 
   const requiredFields = useMemo(() => importService.REQUIRED_FIELDS[type], [type]);
 
@@ -47,6 +60,30 @@ export default function ImportPage() {
   return (
     <section className="card">
       <h1>Bulk Import</h1>
+
+      {isGlobal && (
+        <div className="filters-row">
+          <label>
+            Site:{' '}
+            <select
+              value={selectedSite}
+              onChange={(e) => {
+                const id = Number(e.target.value);
+                setSelectedSite(id);
+                storageService.setLastSite(id);
+                setFile(null);
+                setHeaders([]);
+                setFieldMap({});
+                setSummary(null);
+              }}
+            >
+              {(sites ?? []).map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
 
       {!encryptionKey && (type === 'reservations' || type === 'orders') ? (
         <p className="error">
@@ -86,7 +123,8 @@ export default function ImportPage() {
                 nextFile,
                 type,
                 importService.autoMapFields([], type),
-                currentUser
+                currentUser,
+                siteId
               );
               setHeaders(preview.headers);
               setFieldMap(importService.autoMapFields(preview.headers, type));
@@ -114,7 +152,7 @@ export default function ImportPage() {
               if (!file) {
                 return;
               }
-              const result = await importService.validateFile(file, type, fieldMap, currentUser);
+              const result = await importService.validateFile(file, type, fieldMap, currentUser, siteId);
               setSummary({
                 totalRows: result.totalRows,
                 validRows: result.validRows,
@@ -155,7 +193,7 @@ export default function ImportPage() {
               setError(null);
               setBusy(true);
               try {
-                await importService.startImport(file, type, fieldMap, currentUser, encryptionKey ?? undefined);
+                await importService.startImport(file, type, fieldMap, currentUser, siteId, encryptionKey ?? undefined);
               } catch (importError) {
                 if (importError instanceof Error) {
                   setError(importError.message);

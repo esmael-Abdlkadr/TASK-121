@@ -84,9 +84,9 @@ describe('siteConfigService — IndexedDB-first persistence', () => {
     expect(postHydration.tempLeaveMaxCount).toBe(5);
   });
 
-  it('saveSiteConfig without actor does not require RBAC but still writes to IDB', async () => {
+  it('bootstrapSiteConfig writes to IDB without requiring an actor', async () => {
     const siteId = await db.sites.add({ siteCode: 'SITE-004', name: 'No-Actor Site' });
-    await siteConfigService.saveSiteConfig({
+    await siteConfigService.bootstrapSiteConfig({
       siteId,
       tempLeaveMaxCount: 2,
       tempLeaveMaxMinutes: 10,
@@ -98,5 +98,19 @@ describe('siteConfigService — IndexedDB-first persistence', () => {
     const idbRecord = await db.siteConfigs.get(siteId);
     expect(idbRecord).toBeTruthy();
     expect(idbRecord!.tempLeaveMaxCount).toBe(2);
+  });
+
+  it('saveSiteConfig rejects calls without actor (TypeScript enforced, runtime guard)', async () => {
+    const siteId = await db.sites.add({ siteCode: 'SITE-005', name: 'No-Actor Reject' });
+    await expect(
+      (siteConfigService.saveSiteConfig as Function)({
+        siteId,
+        tempLeaveMaxCount: 2,
+        tempLeaveMaxMinutes: 10,
+        anomalyHeartbeatTimeoutMin: 30,
+        noShowGraceMinutes: 10,
+        ratePerMinute: 0.5
+      })
+    ).rejects.toThrow();
   });
 });

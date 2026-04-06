@@ -32,7 +32,7 @@ async function setup() {
     label: 'Bay 1',
     status: 'Available'
   });
-  await siteConfigService.saveSiteConfig({
+  await siteConfigService.bootstrapSiteConfig({
     siteId,
     tempLeaveMaxCount: 1,
     tempLeaveMaxMinutes: 15,

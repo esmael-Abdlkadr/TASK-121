@@ -85,7 +85,7 @@ describe('Iteration 6 acceptance checks', () => {
       'reservations'
     );
 
-    const batch = await importService.startImport(file, 'reservations', map, actor, encryptionKey);
+    const batch = await importService.startImport(file, 'reservations', map, actor, actor.siteId as number, encryptionKey);
     expect(batch.status).toBe('Failed');
     expect(await db.reservations.count()).toBe(0);
   });
@@ -103,7 +103,7 @@ describe('Iteration 6 acceptance checks', () => {
       'reservations'
     );
 
-    const batch = await importService.startImport(file, 'reservations', map, actor, encryptionKey);
+    const batch = await importService.startImport(file, 'reservations', map, actor, actor.siteId as number, encryptionKey);
     expect(batch.status).toBe('Complete');
     expect(await db.reservations.count()).toBe(2);
   });
@@ -120,8 +120,8 @@ describe('Iteration 6 acceptance checks', () => {
       'reservations'
     );
 
-    await importService.startImport(file, 'reservations', map, actor, encryptionKey);
-    await expect(importService.startImport(file, 'reservations', map, actor, encryptionKey)).rejects.toThrow(
+    await importService.startImport(file, 'reservations', map, actor, actor.siteId as number, encryptionKey);
+    await expect(importService.startImport(file, 'reservations', map, actor, actor.siteId as number, encryptionKey)).rejects.toThrow(
       'IMPORT_DUPLICATE_FILE'
     );
   });
@@ -152,7 +152,7 @@ describe('Iteration 6 acceptance checks', () => {
       ['stationId', 'connectorId', 'customerName', 'customerPlate', 'scheduledStart', 'scheduledEnd'],
       'reservations'
     );
-    const batch = await importService.startImport(file, 'reservations', map, actor, encryptionKey);
+    const batch = await importService.startImport(file, 'reservations', map, actor, actor.siteId as number, encryptionKey);
     expect(batch.status).toBe('Complete');
     expect(batch.duplicateRows).toBe(1);
   });
@@ -241,7 +241,7 @@ describe('Iteration 6 acceptance checks', () => {
       'reservations'
     );
 
-    const batch = await importService.startImport(file, 'reservations', map, actor, encryptionKey);
+    const batch = await importService.startImport(file, 'reservations', map, actor, actor.siteId as number, encryptionKey);
     expect(batch.status).toBe('Complete');
     expect(batch.totalRows).toBe(1);
   });
@@ -258,7 +258,7 @@ describe('Iteration 6 acceptance checks', () => {
       'reservations'
     );
 
-    const batch = await importService.startImport(file, 'reservations', map, actor, encryptionKey);
+    const batch = await importService.startImport(file, 'reservations', map, actor, actor.siteId as number, encryptionKey);
     expect(batch.status).toBe('Complete');
     expect(batch.totalRows).toBe(1);
   });
@@ -275,7 +275,7 @@ describe('Iteration 6 acceptance checks', () => {
       'orders'
     );
 
-    const batch = await importService.startImport(file, 'orders', map, actor, encryptionKey);
+    const batch = await importService.startImport(file, 'orders', map, actor, actor.siteId as number, encryptionKey);
     expect(batch.status).toBe('Failed');
     const records = await db.importRows.where('batchId').equals(batch.id as number).toArray();
     expect(records.some((r) => r.errorCode === 'IMPORT_RATE_OUT_OF_BOUNDS')).toBe(true);
@@ -293,7 +293,7 @@ describe('Iteration 6 acceptance checks', () => {
       'orders'
     );
 
-    const batch = await importService.startImport(file, 'orders', map, actor, encryptionKey);
+    const batch = await importService.startImport(file, 'orders', map, actor, actor.siteId as number, encryptionKey);
     expect(batch.status).toBe('Failed');
     const records = await db.importRows.where('batchId').equals(batch.id as number).toArray();
     expect(records.some((r) => r.errorCode === 'IMPORT_RATE_OUT_OF_BOUNDS')).toBe(true);
@@ -311,7 +311,7 @@ describe('Iteration 6 acceptance checks', () => {
       'orders'
     );
 
-    const batch = await importService.startImport(file, 'orders', map, actor, encryptionKey);
+    const batch = await importService.startImport(file, 'orders', map, actor, actor.siteId as number, encryptionKey);
     expect(batch.status).toBe('Complete');
   });
 
@@ -336,7 +336,7 @@ describe('Iteration 6 acceptance checks', () => {
       'orders'
     );
 
-    const batch = await importService.startImport(file, 'orders', map, actor, encryptionKey);
+    const batch = await importService.startImport(file, 'orders', map, actor, actor.siteId as number, encryptionKey);
     expect(batch.status).toBe('Complete');
     expect(batch.totalRows).toBe(1);
   });

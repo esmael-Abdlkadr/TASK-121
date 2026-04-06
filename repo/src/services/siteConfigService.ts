@@ -58,26 +58,35 @@ async function loadSiteConfig(siteId: number): Promise<SiteConfig> {
 }
 
 /**
- * Write to IndexedDB (authoritative), then update the in-memory cache.
- * Also mirrors to localStorage for backward compat with any stale readers.
+ * Internal bootstrap-only write. Populates default config on first run
+ * without requiring an authenticated actor. NOT for feature/UI paths.
  */
-async function saveSiteConfig(config: SiteConfig, actor?: User): Promise<void> {
-  if (actor) {
-    assertManagerOrAdmin(actor);
-    assertSiteScope(actor, config.siteId);
-  }
+async function bootstrapSiteConfig(config: SiteConfig): Promise<void> {
   await db.siteConfigs.put({ ...config, id: config.siteId });
   configCache.set(config.siteId, config);
   localStorage.setItem(`cb_site_config_${config.siteId}`, JSON.stringify(config));
-  if (actor) {
-    await auditService.log(actor, 'PRICING_UPDATED', 'SiteConfig', config.siteId, {
-      ratePerMinute: config.ratePerMinute
-    });
-  }
+}
+
+/**
+ * Write to IndexedDB (authoritative), then update the in-memory cache.
+ * Also mirrors to localStorage for backward compat with any stale readers.
+ * Actor is mandatory — all feature-path writes require RBAC checks.
+ */
+async function saveSiteConfig(config: SiteConfig, actor: User): Promise<void> {
+  if (!actor) throw new Error('RBAC_ACTOR_REQUIRED');
+  assertManagerOrAdmin(actor);
+  assertSiteScope(actor, config.siteId);
+  await db.siteConfigs.put({ ...config, id: config.siteId });
+  configCache.set(config.siteId, config);
+  localStorage.setItem(`cb_site_config_${config.siteId}`, JSON.stringify(config));
+  await auditService.log(actor, 'PRICING_UPDATED', 'SiteConfig', config.siteId, {
+    ratePerMinute: config.ratePerMinute
+  });
 }
 
 export const siteConfigService = {
   getSiteConfig,
   loadSiteConfig,
-  saveSiteConfig
+  saveSiteConfig,
+  bootstrapSiteConfig
 };

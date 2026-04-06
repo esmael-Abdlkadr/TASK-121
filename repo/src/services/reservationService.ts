@@ -299,7 +299,7 @@ async function getReservationDetail(
 async function bulkCancelReservations(reservationIds: number[], actor: User): Promise<void> {
   assertCanMutate(actor);
   const userId = actor.id as number;
-  rateLimiter.check(userId, 'bulk_reservation_cancel', 100, 60_000, reservationIds.length);
+  rateLimiter.check(userId, 'bulk_reservation_cancel', 200, 60_000, reservationIds.length);
   rateLimiter.record(userId, 'bulk_reservation_cancel', reservationIds.length);
 
   for (const reservationId of reservationIds) {

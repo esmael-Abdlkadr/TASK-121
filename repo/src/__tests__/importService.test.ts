@@ -49,7 +49,7 @@ describe('importService — dedupe, validation, and rollback', () => {
       'reservations'
     );
 
-    const batch = await importService.startImport(file, 'reservations', map, actor, encryptionKey);
+    const batch = await importService.startImport(file, 'reservations', map, actor, actor.siteId as number, encryptionKey);
     expect(batch.status).toBe('Failed');
     expect(batch.invalidRows).toBeGreaterThan(0);
 
@@ -70,7 +70,7 @@ describe('importService — dedupe, validation, and rollback', () => {
       'reservations'
     );
 
-    const batch = await importService.startImport(file, 'reservations', map, actor, encryptionKey);
+    const batch = await importService.startImport(file, 'reservations', map, actor, actor.siteId as number, encryptionKey);
     expect(batch.status).toBe('Failed');
     const rows = await db.importRows.where('batchId').equals(batch.id as number).toArray();
     expect(rows.some(r => r.errorCode === 'IMPORT_REQUIRED_FIELD_MISSING')).toBe(true);
@@ -89,9 +89,9 @@ describe('importService — dedupe, validation, and rollback', () => {
       'reservations'
     );
 
-    await importService.startImport(file, 'reservations', map, actor, encryptionKey);
+    await importService.startImport(file, 'reservations', map, actor, actor.siteId as number, encryptionKey);
     await expect(
-      importService.startImport(file, 'reservations', map, actor, encryptionKey)
+      importService.startImport(file, 'reservations', map, actor, actor.siteId as number, encryptionKey)
     ).rejects.toThrow('IMPORT_DUPLICATE_FILE');
   });
 
@@ -123,7 +123,7 @@ describe('importService — dedupe, validation, and rollback', () => {
       'reservations'
     );
 
-    const batch = await importService.startImport(file, 'reservations', map, actor, encryptionKey);
+    const batch = await importService.startImport(file, 'reservations', map, actor, actor.siteId as number, encryptionKey);
     expect(batch.status).toBe('Complete');
     expect(batch.duplicateRows).toBe(1);
   });
@@ -141,7 +141,7 @@ describe('importService — dedupe, validation, and rollback', () => {
       'orders'
     );
 
-    const batch = await importService.startImport(file, 'orders', map, actor, encryptionKey);
+    const batch = await importService.startImport(file, 'orders', map, actor, actor.siteId as number, encryptionKey);
     expect(batch.status).toBe('Failed');
     const rows = await db.importRows.where('batchId').equals(batch.id as number).toArray();
     expect(rows.some(r => r.errorCode === 'IMPORT_RATE_OUT_OF_BOUNDS')).toBe(true);
@@ -161,7 +161,7 @@ describe('importService — dedupe, validation, and rollback', () => {
       'reservations'
     );
 
-    const batch = await importService.startImport(file, 'reservations', map, actor, encryptionKey);
+    const batch = await importService.startImport(file, 'reservations', map, actor, actor.siteId as number, encryptionKey);
     expect(batch.status).toBe('Complete');
     expect(await db.reservations.count()).toBe(2);
   });

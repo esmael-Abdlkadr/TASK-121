@@ -56,7 +56,7 @@ async function setupUsers() {
     failedAttempts: 0
   });
 
-  await siteConfigService.saveSiteConfig({
+  await siteConfigService.bootstrapSiteConfig({
     siteId,
     tempLeaveMaxCount: 1,
     tempLeaveMaxMinutes: 15,

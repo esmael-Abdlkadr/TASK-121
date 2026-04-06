@@ -52,4 +52,25 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /login/i }));
     expect(await screen.findByText(/account locked/i)).toBeTruthy();
   });
+
+  it('disables submit and shows progress text while login is pending', async () => {
+    let resolveLogin!: () => void;
+    loginMock.mockReturnValueOnce(new Promise<void>((resolve) => { resolveLogin = resolve; }));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <LoginPage />
+      </MemoryRouter>
+    );
+    fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'user' } });
+    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'pass' } });
+    fireEvent.click(screen.getByRole('button', { name: /login/i }));
+
+    // Button should show "Logging in..." and be disabled while pending
+    const button = await screen.findByRole('button', { name: /logging in/i });
+    expect(button).toBeTruthy();
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+
+    // Resolve the login to clean up
+    resolveLogin();
+  });
 });

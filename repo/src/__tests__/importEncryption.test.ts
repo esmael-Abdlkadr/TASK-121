@@ -29,7 +29,7 @@ async function setupForImport() {
     failedAttempts: 0
   });
 
-  await siteConfigService.saveSiteConfig({
+  await siteConfigService.bootstrapSiteConfig({
     siteId,
     tempLeaveMaxCount: 1,
     tempLeaveMaxMinutes: 15,
@@ -64,7 +64,7 @@ describe('Import encryption at rest', () => {
       'reservations'
     );
 
-    await importService.startImport(file, 'reservations', fieldMap, user, key);
+    await importService.startImport(file, 'reservations', fieldMap, user, user.siteId as number, key);
 
     const reservations = await db.reservations.toArray();
     expect(reservations.length).toBe(1);
@@ -94,7 +94,7 @@ describe('Import encryption at rest', () => {
       'orders'
     );
 
-    const batch = await importService.startImport(file, 'orders', fieldMap, user, key);
+    const batch = await importService.startImport(file, 'orders', fieldMap, user, user.siteId as number, key);
     expect(batch.status).toBe('Complete');
 
     const orders = await db.orders.toArray();
@@ -123,7 +123,7 @@ describe('Import encryption at rest', () => {
     );
 
     await expect(
-      importService.startImport(file, 'orders', fieldMap, user)
+      importService.startImport(file, 'orders', fieldMap, user, user.siteId as number)
     ).rejects.toThrow('IMPORT_ENCRYPTION_KEY_REQUIRED');
   });
 
@@ -142,7 +142,7 @@ describe('Import encryption at rest', () => {
     );
 
     await expect(
-      importService.startImport(file, 'reservations', fieldMap, user)
+      importService.startImport(file, 'reservations', fieldMap, user, user.siteId as number)
     ).rejects.toThrow('IMPORT_ENCRYPTION_KEY_REQUIRED');
   });
 });

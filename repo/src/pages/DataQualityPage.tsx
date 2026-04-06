@@ -20,15 +20,14 @@ export default function DataQualityPage() {
     return storageService.getLastSite() ?? 1;
   });
 
+  const siteId = isGlobal ? selectedSite : (currentUser?.siteId as number);
+
   const reports = useLiveQuery(async () => {
     if (!currentUser) {
       return [];
     }
-    if (currentUser.role === 'SystemAdministrator') {
-      return db.qualityReports.orderBy('generatedAt').reverse().toArray();
-    }
-    return db.qualityReports.where('siteId').equals(currentUser.siteId as number).reverse().sortBy('generatedAt');
-  }, [currentUser]);
+    return db.qualityReports.where('siteId').equals(siteId).reverse().sortBy('generatedAt');
+  }, [currentUser, siteId]);
 
   const selected = useMemo(
     () => (reports ?? []).find((report) => report.id === selectedId) ?? null,

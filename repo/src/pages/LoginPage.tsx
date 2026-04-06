@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!currentUser) {
@@ -23,7 +24,9 @@ export default function LoginPage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (busy) return;
     setError(null);
+    setBusy(true);
 
     try {
       await login(username.trim(), password);
@@ -36,6 +39,8 @@ export default function LoginPage() {
         message = `Account locked. Try again in ${minutes} minutes.`;
       }
       setError(message);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -53,6 +58,7 @@ export default function LoginPage() {
           onChange={(event) => setUsername(event.target.value)}
           autoComplete="username"
           required
+          disabled={busy}
         />
 
         <label htmlFor="password">Password</label>
@@ -64,12 +70,13 @@ export default function LoginPage() {
           onChange={(event) => setPassword(event.target.value)}
           autoComplete="current-password"
           required
+          disabled={busy}
         />
 
         {error ? <p className="error">{error}</p> : null}
 
-        <button className="button primary" type="submit">
-          Login
+        <button className="button primary" type="submit" disabled={busy}>
+          {busy ? 'Logging in...' : 'Login'}
         </button>
       </form>
     </section>
