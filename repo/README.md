@@ -1,5 +1,7 @@
 # ChargeBay Offline Operations Console
 
+**Project Type:** web
+
 ChargeBay is a fully offline SPA used by EV charging site teams for reservations, check-in, sessions, orders, notifications, imports, data quality governance, and audit operations. The application runs entirely in the browser with no backend or HTTP dependencies, and persists state in IndexedDB (Dexie) plus small user/site preferences in LocalStorage.
 
 The architecture is service-first: UI pages/components call typed service modules, services enforce RBAC and security checks, and all business events are logged in a tamper-evident audit chain. Sensitive fields are encrypted with AES-GCM using keys derived at login time and kept in memory only.
@@ -16,14 +18,31 @@ The architecture is service-first: UI pages/components call typed service module
 | Import | CSV parser + xlsx |
 | Testing | Vitest + React Testing Library + Playwright |
 
-## Quick Start
+## Startup Instructions (Docker Required)
 
 ```bash
-npm install
-npm run dev
+docker-compose up --build
 ```
 
-App URL: `http://localhost:5173`
+Equivalent modern syntax:
+
+```bash
+docker compose up --build
+```
+
+To stop the app:
+
+```bash
+docker-compose down
+```
+
+## Access Method
+
+- App URL: `http://localhost:5199`
+- Login page: `http://localhost:5199/login`
+- Role-based navigation:
+  - Kiosk mode (`/kiosk/...`): Attendant, SiteManager
+  - Admin mode (`/admin/...`): SystemAdministrator, Auditor
 
 ## Test Credentials
 
@@ -34,12 +53,33 @@ App URL: `http://localhost:5173`
 | `attendant` | `ChargeBay#Att01` | Attendant | Kiosk |
 | `auditor` | `ChargeBay#Aud01` | Auditor | Admin (read-only) |
 
-## Navigation Modes
+## Verification Method
 
-- **Kiosk mode**: Attendant and SiteManager (`/kiosk/...`)
-- **Admin mode**: SystemAdministrator and Auditor (`/admin/...`)
+1. Start the stack with `docker-compose up --build`.
+2. Open `http://localhost:5199/login` and sign in as `manager`.
+3. Verify kiosk flow:
+   - open `/kiosk/reservations`,
+   - create a reservation,
+   - confirm arrival and complete the session from `/kiosk/sessions`.
+4. Sign out and sign in as `auditor`.
+5. Verify read-only enforcement:
+   - `/admin/sessions` is visible,
+   - mutation controls are hidden,
+   - `/admin/import` renders `Forbidden`.
 
-Route and UI access are role-gated, and site-scoped access is enforced in service-layer logic.
+## Run Tests (Docker)
+
+```bash
+bash run_tests.sh
+```
+
+`run_tests.sh` executes both Vitest and Playwright in Dockerized environments.
+
+## Environment Rules
+
+- This project is intended to run fully in Docker for startup and test execution.
+- No manual DB setup is required.
+- No local runtime dependency installation steps are required in this README.
 
 ## Roles
 
@@ -50,13 +90,9 @@ Route and UI access are role-gated, and site-scoped access is enforced in servic
 
 ## Session Restore & Re-Unlock
 
-The encryption key is derived from your password at login time and kept in memory only. If you refresh the page or your session is restored from localStorage, the app will show a **Re-Unlock** modal asking you to re-enter your password to derive the encryption key again. Until unlocked, pages that require encrypted data access will indicate that the key is not available.
+The encryption key is derived from your password at login time and kept in memory only. If you refresh the page or your session is restored from localStorage, the app shows a **Re-Unlock** modal asking you to re-enter your password to derive the encryption key again. Until unlocked, pages that require encrypted data access indicate that the key is not available.
 
 You can also choose to **Logout** from the re-unlock modal.
-
-## Theme
-
-A light/dark theme toggle is available in the shell header. Your preference is persisted in LocalStorage.
 
 ## Storage Layout
 
@@ -69,45 +105,9 @@ All business data, audit logs, site configuration (`siteConfigs` table), and rat
 - **Notification preferences** (`cb_notif_prefs_{userId}`): per-user notification template toggles and desktop banner setting
 - **Site config cache** (`cb_site_config_{siteId}`): synced mirror of IndexedDB site config for synchronous reads
 
-## Build
-
-```bash
-npm run build
-```
-
-Output is written to `dist/`.
-
-## Preview
-
-```bash
-npm run preview
-```
-
-Serves the production build locally.
-
-## Run All Tests
-
-### Local (no Docker required)
-
-```bash
-# Unit + Component tests (Vitest)
-npm run test
-
-# E2E tests (Playwright, uses managed dev server)
-npx playwright install --with-deps
-npx playwright test
-```
-
-### Docker full-suite (optional)
-
-```bash
-# Runs both Vitest and Playwright inside a container
-bash run_tests.sh
-```
-
 ## Export/Import Packages
 
-Use **Admin Dashboard → Export & Archive** (SystemAdministrator only):
+Use **Admin Dashboard -> Export & Archive** (SystemAdministrator only):
 
 1. Pick date range + export password, click **Export Package**.
 2. Transfer generated JSON package to another device.
